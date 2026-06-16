@@ -145,6 +145,20 @@ async function initDb() {
     );
   `);
 
+  // Migrate: add is_admin column if not already present (safe for existing DBs)
+  await db.exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE`);
+
+  // Ensure the admin account always exists regardless of seed state
+  const adminExists = await db.get("SELECT id FROM users WHERE email = 'admin@campustrace.edu'");
+  if (!adminExists) {
+    const hashPwd = (p) => crypto.createHash('sha256').update(p).digest('hex');
+    await db.run(
+      'INSERT INTO users (name, email, student_id, password_hash, is_admin) VALUES (?, ?, ?, ?, ?)',
+      ['Administrator', 'admin@campustrace.edu', 'ADMIN-001', hashPwd('admin123'), true]
+    );
+    console.log('Admin account created: admin@campustrace.edu / admin123');
+  }
+
   // Seed default database parameters if empty
   const userCount = await db.get('SELECT COUNT(*) as count FROM users');
   if (parseInt(userCount.count) === 0) {
@@ -223,7 +237,7 @@ app.post('/api/auth/register', async (req, res) => {
       'INSERT INTO users (name, email, student_id, password_hash) VALUES (?, ?, ?, ?)',
       [name, email, student_id, password_hash]
     );
-    res.status(201).json({ id: result.lastID, name, email, student_id });
+    res.status(201).json({ id: result.lastID, name, email, student_id, is_admin: false });
   } catch (err) {
     if (err.message.includes('UNIQUE constraint failed') || err.message.includes('unique constraint')) {
       if (err.message.includes('student_id')) {
@@ -252,7 +266,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email or password' });
     }
 
-    res.json({ id: user.id, name: user.name, email: user.email, student_id: user.student_id });
+    res.json({ id: user.id, name: user.name, email: user.email, student_id: user.student_id, is_admin: user.is_admin || false });
   } catch (err) {
     res.status(500).json({ error: 'Login failed: ' + err.message });
   }
@@ -569,6 +583,65 @@ app.put('/api/notifications/:id/read', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to mark notification as read: ' + err.message });
+  }
+});
+
+// Admin: Delete Item
+app.delete('/api/items/:id', async (req, res) => {
+  const { id } = req.params;
+  const { user_id } = req.body;
+
+  try {
+    const user = await db.get('SELECT is_admin FROM users WHERE id = ?', [user_id]);
+    if (!user || !user.is_admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const item = await db.get('SELECT id FROM items WHERE id = ?', [id]);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    // Remove associated data before deleting item
+    const claimants = await db.all('SELECT claimant_id FROM claims WHERE item_id = ?', [id]);
+    for (const c of claimants) {
+      await db.run('DELETE FROM notifications WHERE user_id = ? AND message LIKE ?', [c.claimant_id, `%${id}%`]);
+    }
+    await db.run('DELETE FROM claims WHERE item_id = ?', [id]);
+    await db.run('DELETE FROM items WHERE id = ?', [id]);
+
+    res.json({ message: 'Item deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete item: ' + err.message });
+  }
+});
+
+// Admin: Edit Item
+app.put('/api/items/:id', async (req, res) => {
+  const { id } = req.params;
+  const { user_id, type, title, description, category, location, date_lost_found, status } = req.body;
+
+  try {
+    const user = await db.get('SELECT is_admin FROM users WHERE id = ?', [user_id]);
+    if (!user || !user.is_admin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const item = await db.get('SELECT id FROM items WHERE id = ?', [id]);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    await db.run(`
+      UPDATE items SET
+        type = ?, title = ?, description = ?, category = ?,
+        location = ?, date_lost_found = ?, status = ?
+      WHERE id = ?
+    `, [type, title, description, category, location, date_lost_found, status, id]);
+
+    res.json({ message: 'Item updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update item: ' + err.message });
   }
 });
 

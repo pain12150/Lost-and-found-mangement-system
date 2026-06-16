@@ -12,7 +12,13 @@ export default function App() {
     const saved = localStorage.getItem('traceback_user');
     return saved ? JSON.parse(saved) : null;
   });
-  
+
+  // Persist auth form credentials across modal open/close and logout
+  const [authEmail, setAuthEmail] = useState(() => localStorage.getItem('traceback_last_email') || '');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authStudentId, setAuthStudentId] = useState('');
+
   // Toast notifications
   const [toasts, setToasts] = useState([]);
   const showToast = (message, type = 'info') => {
@@ -51,7 +57,7 @@ export default function App() {
     fetchNotifications();
     let interval;
     if (currentUser) {
-      interval = setInterval(fetchNotifications, 8000); // Poll every 8 seconds
+      interval = setInterval(fetchNotifications, 8000);
     }
     return () => clearInterval(interval);
   }, [currentUser]);
@@ -62,7 +68,7 @@ export default function App() {
         method: 'PUT'
       });
       if (response.ok) {
-        setNotifications(prev => 
+        setNotifications(prev =>
           prev.map(n => n.id === id ? { ...n, is_read: 1 } : n)
         );
       }
@@ -73,7 +79,13 @@ export default function App() {
 
   const handleAuthSuccess = (user) => {
     localStorage.setItem('traceback_user', JSON.stringify(user));
+    localStorage.setItem('traceback_last_email', user.email);
     setCurrentUser(user);
+    // Keep email prefilled, clear password and registration fields
+    setAuthEmail(user.email);
+    setAuthPassword('');
+    setAuthName('');
+    setAuthStudentId('');
     setAuthModalOpen(false);
   };
 
@@ -81,13 +93,15 @@ export default function App() {
     localStorage.removeItem('traceback_user');
     setCurrentUser(null);
     setNotifications([]);
+    // Keep last email prefilled for quick sign-back-in; clear password
+    setAuthPassword('');
     showToast('Logged out successfully', 'info');
     onViewChange('dashboard');
   };
 
   return (
     <div className="app-container">
-      <Navbar 
+      <Navbar
         activeView={activeView}
         onViewChange={onViewChange}
         currentUser={currentUser}
@@ -99,16 +113,16 @@ export default function App() {
 
       <main className="main-content">
         {activeView === 'dashboard' && (
-          <Dashboard 
-            currentUser={currentUser} 
+          <Dashboard
+            currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
             showToast={showToast}
           />
         )}
-        
+
         {activeView === 'report' && (
-          <ReportForm 
-            currentUser={currentUser} 
+          <ReportForm
+            currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
             onViewChange={onViewChange}
             showToast={showToast}
@@ -116,8 +130,8 @@ export default function App() {
         )}
 
         {activeView === 'claims' && (
-          <ClaimsDashboard 
-            currentUser={currentUser} 
+          <ClaimsDashboard
+            currentUser={currentUser}
             onOpenAuth={() => setAuthModalOpen(true)}
             showToast={showToast}
           />
@@ -125,11 +139,19 @@ export default function App() {
       </main>
 
       {/* Auth Modal Overlay */}
-      <AuthModal 
+      <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
         showToast={showToast}
+        authEmail={authEmail}
+        setAuthEmail={setAuthEmail}
+        authPassword={authPassword}
+        setAuthPassword={setAuthPassword}
+        authName={authName}
+        setAuthName={setAuthName}
+        authStudentId={authStudentId}
+        setAuthStudentId={setAuthStudentId}
       />
 
       {/* Toast Messages Stack */}

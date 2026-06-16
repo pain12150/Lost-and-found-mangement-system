@@ -1,28 +1,30 @@
 import React, { useState } from 'react';
 import { X, Mail, Lock, User, LogIn, UserPlus } from 'lucide-react';
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess, showToast }) {
+export default function AuthModal({
+  isOpen, onClose, onAuthSuccess, showToast,
+  authEmail, setAuthEmail,
+  authPassword, setAuthPassword,
+  authName, setAuthName,
+  authStudentId, setAuthStudentId
+}) {
   const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [studentId, setStudentId] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password || (!isLogin && (!name || !studentId))) {
+    if (!authEmail || !authPassword || (!isLogin && (!authName || !authStudentId))) {
       showToast('Please fill out all fields', 'error');
       return;
     }
 
     setLoading(true);
     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-    const payload = isLogin 
-      ? { email, password } 
-      : { name, email, student_id: studentId, password };
+    const payload = isLogin
+      ? { email: authEmail, password: authPassword }
+      : { name: authName, email: authEmail, student_id: authStudentId, password: authPassword };
 
     try {
       const response = await fetch(endpoint, {
@@ -38,7 +40,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, showToast })
 
       showToast(isLogin ? `Welcome back, ${data.name}!` : 'Account created successfully!', 'success');
       onAuthSuccess(data);
-      onClose();
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -70,8 +71,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, showToast })
                   className="form-control"
                   style={{ paddingLeft: '35px' }}
                   placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={authName}
+                  onChange={(e) => setAuthName(e.target.value)}
                   disabled={loading}
                 />
               </div>
@@ -89,8 +90,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, showToast })
                   className="form-control"
                   style={{ paddingLeft: '35px' }}
                   placeholder="e.g. STU-2026-999"
-                  value={studentId}
-                  onChange={(e) => setStudentId(e.target.value)}
+                  value={authStudentId}
+                  onChange={(e) => setAuthStudentId(e.target.value)}
                   disabled={loading}
                 />
               </div>
@@ -107,9 +108,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, showToast })
                 className="form-control"
                 style={{ paddingLeft: '35px' }}
                 placeholder="you@student.edu"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
                 disabled={loading}
+                autoComplete="email"
               />
             </div>
           </div>
@@ -124,9 +126,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, showToast })
                 className="form-control"
                 style={{ paddingLeft: '35px' }}
                 placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
                 disabled={loading}
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
               />
             </div>
           </div>

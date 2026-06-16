@@ -141,8 +141,21 @@ export default function Navbar({ activeView, onViewChange, currentUser, onLogout
 
               {/* User details and Logout */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderLeft: '1px solid var(--border-glass)', paddingLeft: '1rem' }}>
-                <span className="user-name-display" style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-primary)' }}>
-                  {currentUser.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: '0.25rem' }}>({currentUser.student_id})</span>
+                <span className="user-name-display" style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  {currentUser.name}
+                  {currentUser.is_admin && (
+                    <span style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                      color: '#fff',
+                      padding: '1px 7px',
+                      borderRadius: '9999px',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase'
+                    }}>Admin</span>
+                  )}
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: '0.1rem' }}>({currentUser.student_id})</span>
                 </span>
                 <button 
                   onClick={onLogout} 
