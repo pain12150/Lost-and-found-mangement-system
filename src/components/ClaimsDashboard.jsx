@@ -123,11 +123,11 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
       ) : claims.length === 0 ? (
         <div className="glass-panel" style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
           <Info size={40} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
-          <h3>No claims found</h3>
+          <h3>No claims or recovery reports found</h3>
           <p style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
             {tab === 'received' 
-              ? "When other students submit ownership proofs for found items you reported, they'll appear here."
-              : "When you claim items reported by other students, you can track their verification status here."}
+              ? "When other students report finding your lost items or submit ownership claims for found items, they'll appear here."
+              : "When you submit claims or report found items, you can track their status here."}
           </p>
         </div>
       ) : (
@@ -158,8 +158,8 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   <span>
                     {tab === 'received' 
-                      ? `Claimant: ${claim.claimant_name} (${claim.claimant_student_id})` 
-                      : `Reporter: ${claim.reporter_name} (${claim.reporter_student_id})`}
+                      ? `${claim.item_type === 'lost' ? 'Finder' : 'Claimant'}: ${claim.claimant_name} (${claim.claimant_student_id})` 
+                      : `${claim.item_type === 'lost' ? 'Owner' : 'Reporter'}: ${claim.reporter_name} (${claim.reporter_student_id})`}
                   </span>
                   <span>
                     {new Date(claim.created_at).toLocaleDateString()}
@@ -173,7 +173,9 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
           {selectedClaim && (
             <div className="glass-panel" style={{ padding: '1.5rem', position: 'sticky', top: '90px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-glass)', paddingBottom: '0.75rem' }}>
-                <h3 style={{ fontSize: '1.15rem' }}>Verification Details</h3>
+                <h3 style={{ fontSize: '1.15rem' }}>
+                  {selectedClaim.item_type === 'lost' ? 'Recovery Details' : 'Verification Details'}
+                </h3>
                 <button className="modal-close" onClick={() => setSelectedClaim(null)}>
                   <X size={16} />
                 </button>
@@ -195,8 +197,18 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
 
               {/* Verification Proof comparing description */}
               <div style={{ marginBottom: '1.25rem' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>CLAIMANT'S VERIFICATION PROOF</span>
-                <div style={{ background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', padding: '1rem', borderRadius: 'var(--border-radius-sm)', color: 'var(--text-primary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
+                  {selectedClaim.item_type === 'lost' ? "FINDER'S RECOVERY REPORT" : "CLAIMANT'S VERIFICATION PROOF"}
+                </span>
+                <div style={{ 
+                  background: selectedClaim.item_type === 'lost' ? 'rgba(16,185,129,0.03)' : 'rgba(245,158,11,0.03)', 
+                  border: selectedClaim.item_type === 'lost' ? '1px solid rgba(16,185,129,0.15)' : '1px solid rgba(245,158,11,0.15)', 
+                  padding: '1rem', 
+                  borderRadius: 'var(--border-radius-sm)', 
+                  color: 'var(--text-primary)', 
+                  fontSize: '0.9rem', 
+                  lineHeight: '1.4' 
+                }}>
                   {selectedClaim.proof_description}
                 </div>
               </div>
@@ -204,7 +216,9 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
               {/* Claimant Contact Details */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
-                  {tab === 'received' ? "CLAIMANT'S DETAILS" : "REPORTER'S DETAILS"}
+                  {selectedClaim.item_type === 'lost'
+                    ? (tab === 'received' ? "FINDER'S DETAILS" : "OWNER'S DETAILS")
+                    : (tab === 'received' ? "CLAIMANT'S DETAILS" : "REPORTER'S DETAILS")}
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -239,7 +253,7 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
                           style={{ padding: '0.5rem' }}
                         >
                           <XCircle size={16} />
-                          <span>Reject Claim</span>
+                          <span>{selectedClaim.item_type === 'lost' ? 'Reject Report' : 'Reject Claim'}</span>
                         </button>
                         <button 
                           onClick={() => handleResolveClaim(selectedClaim.id, 'approved')}
@@ -248,7 +262,7 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
                           style={{ padding: '0.5rem' }}
                         >
                           <CheckCircle size={16} />
-                          <span>Approve Claim</span>
+                          <span>{selectedClaim.item_type === 'lost' ? 'Verify Found' : 'Approve Claim'}</span>
                         </button>
                       </div>
                     )
@@ -261,12 +275,16 @@ export default function ClaimsDashboard({ currentUser, onOpenAuth, showToast }) 
                 ) : selectedClaim.status === 'approved' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-success)', fontSize: '0.9rem', fontWeight: 600, background: 'rgba(16,185,129,0.05)', padding: '0.75rem', borderRadius: '4px', border: '1px solid rgba(16,185,129,0.2)' }}>
                     <CheckCircle size={18} />
-                    <span>Claim Approved and Ownership Verified!</span>
+                    <span>
+                      {selectedClaim.item_type === 'lost' ? 'Recovery Report Verified!' : 'Claim Approved and Ownership Verified!'}
+                    </span>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-error)', fontSize: '0.9rem', fontWeight: 600, background: 'rgba(244,63,94,0.05)', padding: '0.75rem', borderRadius: '4px', border: '1px solid rgba(244,63,94,0.2)' }}>
                     <XCircle size={18} />
-                    <span>Claim Rejected/Closed.</span>
+                    <span>
+                      {selectedClaim.item_type === 'lost' ? 'Recovery Report Rejected/Closed.' : 'Claim Rejected/Closed.'}
+                    </span>
                   </div>
                 )}
               </div>

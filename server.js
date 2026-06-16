@@ -42,176 +42,108 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Database configuration
-let isPg = false;
+// Database configuration (Exclusively PostgreSQL)
 let db;
 
 async function initDb() {
-  if (process.env.DATABASE_URL) {
-    isPg = true;
-    console.log('Connecting to remote PostgreSQL database...');
-    
-    // Set up Postgres connection pool
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false // Required for platforms like Render/Supabase
-      }
-    });
-
-    // Translate SQLite style "?" placeholders to Postgres "$1, $2" style
-    const pgTranslate = (sql) => {
-      let index = 1;
-      return sql.replace(/\?/g, () => `$${index++}`);
-    };
-
-    db = {
-      get: async (sql, params = []) => {
-        const result = await pool.query(pgTranslate(sql), params);
-        return result.rows[0] || null;
-      },
-      all: async (sql, params = []) => {
-        const result = await pool.query(pgTranslate(sql), params);
-        return result.rows;
-      },
-      run: async (sql, params = []) => {
-        const translated = pgTranslate(sql);
-        let querySql = translated;
-        
-        // Append RETURNING id to return lastID for insertions
-        const isInsert = sql.trim().toUpperCase().startsWith('INSERT');
-        if (isInsert) {
-          querySql = `${translated} RETURNING id`;
-        }
-
-        const result = await pool.query(querySql, params);
-        const lastID = isInsert && result.rows[0] ? result.rows[0].id : null;
-        return { lastID, changes: result.rowCount };
-      },
-      exec: async (sql) => {
-        await pool.query(sql);
-      }
-    };
-
-    // Create Postgres schemas
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        student_id TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS items (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        type TEXT CHECK(type IN ('lost', 'found')) NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        category TEXT NOT NULL,
-        location TEXT NOT NULL,
-        date_lost_found TEXT NOT NULL,
-        image_url TEXT,
-        status TEXT CHECK(status IN ('open', 'claimed', 'resolved')) DEFAULT 'open',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS claims (
-        id SERIAL PRIMARY KEY,
-        item_id INTEGER NOT NULL,
-        claimant_id INTEGER NOT NULL,
-        proof_description TEXT NOT NULL,
-        contact_info TEXT NOT NULL,
-        status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(item_id) REFERENCES items(id),
-        FOREIGN KEY(claimant_id) REFERENCES users(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS notifications (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        message TEXT NOT NULL,
-        is_read INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-      );
-    `);
-
-  } else {
-    isPg = false;
-    console.log('Connecting to local SQLite database...');
-    
-    const { open } = await import('sqlite');
-    const sqlite3 = (await import('sqlite3')).default;
-    
-    const sqliteDb = await open({
-      filename: path.join(__dirname, 'database.sqlite'),
-      driver: sqlite3.Database
-    });
-
-    db = {
-      get: (sql, params = []) => sqliteDb.get(sql, params),
-      all: (sql, params = []) => sqliteDb.all(sql, params),
-      run: (sql, params = []) => sqliteDb.run(sql, params),
-      exec: (sql) => sqliteDb.exec(sql)
-    };
-
-    // Create SQLite schemas
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        student_id TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        type TEXT CHECK(type IN ('lost', 'found')) NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        category TEXT NOT NULL,
-        location TEXT NOT NULL,
-        date_lost_found TEXT NOT NULL,
-        image_url TEXT,
-        status TEXT CHECK(status IN ('open', 'claimed', 'resolved')) DEFAULT 'open',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS claims (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        item_id INTEGER NOT NULL,
-        claimant_id INTEGER NOT NULL,
-        proof_description TEXT NOT NULL,
-        contact_info TEXT NOT NULL,
-        status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(item_id) REFERENCES items(id),
-        FOREIGN KEY(claimant_id) REFERENCES users(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        message TEXT NOT NULL,
-        is_read INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-      );
-    `);
+  if (!process.env.DATABASE_URL) {
+    console.error('FATAL CONFIGURATION ERROR: DATABASE_URL environment variable is missing.');
+    console.error('The application requires an online cloud database connection (e.g. Supabase Postgres) to start.');
+    process.exit(1);
   }
+
+  console.log('Connecting to remote PostgreSQL database...');
+  
+  // Set up Postgres connection pool
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false // Required for platforms like Render/Supabase
+    }
+  });
+
+  // Translate "?" placeholders to Postgres "$1, $2" style
+  const pgTranslate = (sql) => {
+    let index = 1;
+    return sql.replace(/\?/g, () => `$${index++}`);
+  };
+
+  db = {
+    get: async (sql, params = []) => {
+      const result = await pool.query(pgTranslate(sql), params);
+      return result.rows[0] || null;
+    },
+    all: async (sql, params = []) => {
+      const result = await pool.query(pgTranslate(sql), params);
+      return result.rows;
+    },
+    run: async (sql, params = []) => {
+      const translated = pgTranslate(sql);
+      let querySql = translated;
+      
+      const isInsert = sql.trim().toUpperCase().startsWith('INSERT');
+      if (isInsert) {
+        querySql = `${translated} RETURNING id`;
+      }
+
+      const result = await pool.query(querySql, params);
+      const lastID = isInsert && result.rows[0] ? result.rows[0].id : null;
+      return { lastID, changes: result.rowCount };
+    },
+    exec: async (sql) => {
+      await pool.query(sql);
+    }
+  };
+
+  // Create Postgres schemas
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      student_id TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS items (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      type TEXT CHECK(type IN ('lost', 'found')) NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      location TEXT NOT NULL,
+      date_lost_found TEXT NOT NULL,
+      image_url TEXT,
+      status TEXT CHECK(status IN ('open', 'claimed', 'resolved')) DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS claims (
+      id SERIAL PRIMARY KEY,
+      item_id INTEGER NOT NULL,
+      claimant_id INTEGER NOT NULL,
+      proof_description TEXT NOT NULL,
+      contact_info TEXT NOT NULL,
+      status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(item_id) REFERENCES items(id),
+      FOREIGN KEY(claimant_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+  `);
 
   // Seed default database parameters if empty
   const userCount = await db.get('SELECT COUNT(*) as count FROM users');
@@ -431,7 +363,7 @@ app.post('/api/items', upload.single('image'), async (req, res) => {
   }
 });
 
-// Claims API
+// Claims / Finders Reports API
 app.post('/api/items/:id/claims', async (req, res) => {
   const { id: item_id } = req.params;
   const { claimant_id, proof_description, contact_info } = req.body;
@@ -464,10 +396,15 @@ app.post('/api/items/:id/claims', async (req, res) => {
 
     const claimant = await db.get('SELECT name, student_id FROM users WHERE id = ?', [claimant_id]);
 
+    const notifTitle = item.type === 'lost' ? 'Item Found Alert' : 'New Claim Submitted';
+    const notifMessage = item.type === 'lost'
+      ? `${claimant.name} (${claimant.student_id}) reported finding your lost item "${item.title}".`
+      : `${claimant.name} (${claimant.student_id}) submitted a claim verification for your item "${item.title}".`;
+
     await db.run(`
       INSERT INTO notifications (user_id, title, message)
       VALUES (?, ?, ?)
-    `, [item.user_id, 'New Claim Submitted', `${claimant.name} (${claimant.student_id}) submitted a claim verification for "${item.title}".`]);
+    `, [item.user_id, notifTitle, notifMessage]);
 
     res.status(201).json({ id: result.lastID });
   } catch (err) {
@@ -529,7 +466,7 @@ app.put('/api/claims/:id', async (req, res) => {
 
   try {
     const claim = await db.get(`
-      SELECT claims.*, items.user_id as reporter_id, items.title as item_title, items.id as item_id 
+      SELECT claims.*, items.user_id as reporter_id, items.title as item_title, items.id as item_id, items.type as item_type
       FROM claims
       JOIN items ON claims.item_id = items.id
       WHERE claims.id = ?
@@ -564,22 +501,38 @@ app.put('/api/claims/:id', async (req, res) => {
           "UPDATE claims SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
           [other.id]
         );
+        
+        const closeTitle = claim.item_type === 'lost' ? 'Report Closed' : 'Claim Closed';
+        const closeMsg = claim.item_type === 'lost'
+          ? `The report for "${claim.item_title}" has been closed because the owner accepted another finder's verification.`
+          : `Your claim for "${claim.item_title}" was closed because it was returned to another claimant.`;
+
         await db.run(`
           INSERT INTO notifications (user_id, title, message)
           VALUES (?, ?, ?)
-        `, [other.claimant_id, 'Claim Closed', `Your claim for "${claim.item_title}" was closed because it was returned to another claimant.`]);
+        `, [other.claimant_id, closeTitle, closeMsg]);
       }
 
+      const appNotifTitle = claim.item_type === 'lost' ? 'Recovery Verified!' : 'Claim Approved!';
+      const appNotifMsg = claim.item_type === 'lost'
+        ? `Great news! The owner has verified your recovery report for "${claim.item_title}".`
+        : `Great news! Your claim for "${claim.item_title}" has been approved. Contact the reporter to coordinate item collection.`;
+
       await db.run(`
         INSERT INTO notifications (user_id, title, message)
         VALUES (?, ?, ?)
-      `, [claim.claimant_id, 'Claim Approved!', `Great news! Your claim for "${claim.item_title}" has been approved. Contact the reporter to coordinate item collection.`]);
+      `, [claim.claimant_id, appNotifTitle, appNotifMsg]);
 
     } else if (status === 'rejected') {
+      const rejNotifTitle = claim.item_type === 'lost' ? 'Recovery Rejected' : 'Claim Rejected';
+      const rejNotifMsg = claim.item_type === 'lost'
+        ? `Your recovery report for "${claim.item_title}" was not verified by the owner.`
+        : `Your claim for "${claim.item_title}" has been rejected. The reporter did not accept your verification proof.`;
+
       await db.run(`
         INSERT INTO notifications (user_id, title, message)
         VALUES (?, ?, ?)
-      `, [claim.claimant_id, 'Claim Rejected', `Your claim for "${claim.item_title}" has been rejected. The reporter did not accept your verification proof.`]);
+      `, [claim.claimant_id, rejNotifTitle, rejNotifMsg]);
     }
 
     res.json({ message: `Claim successfully ${status}` });

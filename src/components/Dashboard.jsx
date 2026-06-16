@@ -357,7 +357,7 @@ export default function Dashboard({ currentUser, onOpenAuth, showToast }) {
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelectedItem(null)}>Close</button>
-              {selectedItem.type === 'found' && selectedItem.status === 'open' && (
+              {selectedItem.status === 'open' && (
                 currentUser && currentUser.id === selectedItem.user_id ? (
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>You reported this item</span>
                 ) : (
@@ -365,7 +365,7 @@ export default function Dashboard({ currentUser, onOpenAuth, showToast }) {
                     className="btn btn-primary" 
                     onClick={() => {
                       if (!currentUser) {
-                        showToast('Please sign in to submit a claim', 'error');
+                        showToast(selectedItem.type === 'lost' ? 'Please sign in to report finding this item' : 'Please sign in to submit a claim', 'error');
                         onOpenAuth();
                       } else {
                         setShowClaimModal(true);
@@ -373,7 +373,7 @@ export default function Dashboard({ currentUser, onOpenAuth, showToast }) {
                     }}
                   >
                     <ExternalLink size={16} />
-                    <span>Claim this Item</span>
+                    <span>{selectedItem.type === 'lost' ? 'I Found This Item' : 'Claim this Item'}</span>
                   </button>
                 )
               )}
@@ -382,12 +382,12 @@ export default function Dashboard({ currentUser, onOpenAuth, showToast }) {
         </div>
       )}
 
-      {/* Claim Form Modal */}
+      {/* Claim / Found Form Modal */}
       {showClaimModal && selectedItem && (
         <div className="modal-overlay" onClick={() => setShowClaimModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header">
-              <h3>Claim Ownership: {selectedItem.title}</h3>
+              <h3>{selectedItem.type === 'lost' ? 'Report Found: ' + selectedItem.title : 'Claim Ownership: ' + selectedItem.title}</h3>
               <button className="modal-close" onClick={() => setShowClaimModal(false)}>
                 <X size={18} />
               </button>
@@ -395,17 +395,29 @@ export default function Dashboard({ currentUser, onOpenAuth, showToast }) {
             
             <form onSubmit={handleClaimSubmit}>
               <div className="modal-body">
-                <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', padding: '0.85rem', borderRadius: 'var(--border-radius-sm)', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--accent-warning)', lineHeight: '1.4' }}>
-                  <strong>Security Note:</strong> Please describe unique details (e.g. laptop stickers, phone wallpaper, notebook topics, keys keychains) to help the reporter verify your ownership.
-                </div>
+                {selectedItem.type === 'lost' ? (
+                  <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', padding: '0.85rem', borderRadius: 'var(--border-radius-sm)', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--accent-success)', lineHeight: '1.4' }}>
+                    <strong>Recovery Note:</strong> Please describe where you found this item, where it is kept now (e.g. at library desk, hostel reception, canteen counter), or if you have it with you.
+                  </div>
+                ) : (
+                  <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', padding: '0.85rem', borderRadius: 'var(--border-radius-sm)', marginBottom: '1.25rem', fontSize: '0.8rem', color: 'var(--accent-warning)', lineHeight: '1.4' }}>
+                    <strong>Security Note:</strong> Please describe unique details (e.g. laptop stickers, phone wallpaper, notebook topics, keys keychains) to help the reporter verify your ownership.
+                  </div>
+                )}
 
                 <div className="form-group">
-                  <label htmlFor="claim-proof">Verification Proof / Descriptions</label>
+                  <label htmlFor="claim-proof">
+                    {selectedItem.type === 'lost' ? 'Recovery Details / Location' : 'Verification Proof / Descriptions'}
+                  </label>
                   <textarea
                     id="claim-proof"
                     className="form-control"
                     rows={4}
-                    placeholder="Provide specific details (e.g. details of documents inside, scratch markings, stickers, specific files on drives, passcode code, roommate's name)..."
+                    placeholder={
+                      selectedItem.type === 'lost' 
+                        ? "Where did you find it? Where is it currently kept? (e.g., 'Handed over to canteen manager', 'Kept at library desk')" 
+                        : "Provide specific details (e.g. details of documents inside, scratch markings, stickers, specific files on drives, passcode code, roommate's name)..."
+                    }
                     value={claimProof}
                     onChange={(e) => setClaimProof(e.target.value)}
                     required
@@ -431,7 +443,7 @@ export default function Dashboard({ currentUser, onOpenAuth, showToast }) {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={submittingClaim}>
-                  {submittingClaim ? 'Submitting...' : 'Submit Claim'}
+                  {submittingClaim ? 'Submitting...' : (selectedItem.type === 'lost' ? 'Submit Recovery Alert' : 'Submit Claim')}
                 </button>
               </div>
             </form>
