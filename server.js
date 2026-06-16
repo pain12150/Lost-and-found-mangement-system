@@ -1,7 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { open } from 'sqlite';
-import sqlite3 from 'sqlite3';
 import pg from 'pg';
 import multer from 'multer';
 import path from 'path';
@@ -148,6 +146,9 @@ async function initDb() {
   } else {
     isPg = false;
     console.log('Connecting to local SQLite database...');
+    
+    const { open } = await import('sqlite');
+    const sqlite3 = (await import('sqlite3')).default;
     
     const sqliteDb = await open({
       filename: path.join(__dirname, 'database.sqlite'),
